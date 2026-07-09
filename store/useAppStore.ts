@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SecureStorage } from '../services/secureStorage';
 
 export interface Measurements {
   chest: number;
@@ -34,6 +35,8 @@ export interface ScanEntry {
   neck: number;
   arms: number;
   size: string;
+  confidence: number;
+  qualityScore: 'excellent' | 'good' | 'fair' | 'poor';
 }
 
 export interface ClothingItem {
@@ -65,9 +68,15 @@ interface AppState {
   addCapturedPhoto: (uri: string) => void;
   clearCapturedPhotos: () => void;
 
+  // Last Scan Photos (NOT persisted - in memory only)
+  lastScanFrontPhoto: string | null;
+  lastScanSidePhoto: string | null;
+  saveScanPhotos: (front: string, side: string) => void;
+
   // Scan History
   scanHistory: ScanEntry[];
   addScan: (scan: Omit<ScanEntry, 'id' | 'date'>) => void;
+  clearScanHistory: () => void;
 
   // Clothing / Avatar
   selectedClothing: number;
@@ -76,6 +85,14 @@ interface AppState {
   setSelectedFit: (fit: 'Slim' | 'Regular' | 'Relaxed') => void;
   selectedViewAngle: 'L' | 'F' | 'R' | 'B';
   setSelectedViewAngle: (angle: 'L' | 'F' | 'R' | 'B') => void;
+
+  // Secure Storage
+  saveSecureMeasurements: (measurements: Measurements) => Promise<void>;
+  loadSecureMeasurements: () => Promise<Measurements | null>;
+  deleteSecureMeasurements: () => Promise<void>;
+
+  // Reset
+  clearUserData: () => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -120,6 +137,12 @@ export const useAppStore = create<AppState>()(
     set((state) => ({ capturedPhotos: [...state.capturedPhotos, uri] })),
   clearCapturedPhotos: () => set({ capturedPhotos: [] }),
 
+  // Last Scan Photos
+  lastScanFrontPhoto: null,
+  lastScanSidePhoto: null,
+  saveScanPhotos: (front, side) =>
+    set({ lastScanFrontPhoto: front, lastScanSidePhoto: side }),
+
   // Scan History
   scanHistory: [],
   addScan: (scan) =>
@@ -133,6 +156,7 @@ export const useAppStore = create<AppState>()(
         ...state.scanHistory,
       ].slice(0, 10),
     })),
+  clearScanHistory: () => set({ scanHistory: [] }),
 
   // Clothing / Avatar
   selectedClothing: 0,
@@ -141,10 +165,62 @@ export const useAppStore = create<AppState>()(
   setSelectedFit: (fit) => set({ selectedFit: fit }),
   selectedViewAngle: 'F',
   setSelectedViewAngle: (angle) => set({ selectedViewAngle: angle }),
+
+  // Secure Storage Methods
+  saveSecureMeasurements: async (measurements: Measurements) => {
+    try {
+      await SecureStorage.saveMeasurement('measurements', measurements);
+    } catch (error) {
+      console.error('Failed to save secure measurements:', error);
+    }
+  },
+
+  loadSecureMeasurements: async () => {
+    try {
+      return await SecureStorage.getMeasurement('measurements');
+    } catch (error) {
+      console.error('Failed to load secure measurements:', error);
+      return null;
+    }
+  },
+
+  deleteSecureMeasurements: async () => {
+    try {
+      await SecureStorage.deleteItem('measurements');
+    } catch (error) {
+      console.error('Failed to delete secure measurements:', error);
+    }
+  },
+
+  clearUserData: () => set({
+    user: { name: '', email: '', phone: '', gender: 'male' },
+    measurements: {
+      chest: 94, waist: 78, hips: 97, shoulder: 46,
+      inseam: 81, neck: 38, arms: 35, height: 175, weight: 70, age: 28,
+    },
+    selectedSize: 'M',
+    captureStep: 0,
+    capturedPhotos: [],
+    lastScanFrontPhoto: null,
+    lastScanSidePhoto: null,
+    scanHistory: [],
+    selectedClothing: 0,
+    selectedFit: 'Regular',
+    selectedViewAngle: 'F',
+  }),
 }),
     {
       name: 'bodyfitai-storage',
       storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        user: state.user,
+        measurements: state.measurements,
+        selectedSize: state.selectedSize,
+        scanHistory: state.scanHistory,
+        selectedClothing: state.selectedClothing,
+        selectedFit: state.selectedFit,
+        selectedViewAngle: state.selectedViewAngle,
+      }),
     }
   )
 );

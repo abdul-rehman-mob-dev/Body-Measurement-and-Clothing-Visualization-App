@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  firebaseUid  String        @unique
+  email        String
+  name         String
+  phone        String?
+  gender       String?
+  height       Float?
+  weight       Float?
+  age          Int?
+  profileImage String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  measurements Measurement[]
+  scans        Scan[]
+}
+
+model Measurement {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chest        Float
+  waist        Float
+  hips         Float
+  shoulder     Float
+  inseam       Float
+  neck         Float
+  arms         Float?
+  height       Float?
+  weight       Float?
+  size         String
+  confidence   Float
+  qualityScore String
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Scan {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  frontPhotoUrl String
+  sidePhotoUrl  String?
+  chest         Float
+  waist         Float
+  hips          Float
+  shoulder      Float
+  inseam        Float
+  neck          Float
+  arms          Float?
+  size          String
+  confidence    Float
+  qualityScore  String
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}

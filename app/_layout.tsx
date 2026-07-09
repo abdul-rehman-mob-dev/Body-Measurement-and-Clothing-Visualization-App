@@ -4,9 +4,15 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { AuthProvider } from '../context/AuthContext';
+import { useEffect } from 'react';
+import { SecureStorage } from '../services/secureStorage';
 
 function RootLayoutInner() {
   const { colors } = useTheme();
+
+  useEffect(() => {
+    SecureStorage.initialize();
+  }, []);
 
   return (
     <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -18,9 +24,11 @@ function RootLayoutInner() {
         <Stack.Screen name="profile-setup" />
         <Stack.Screen name="instructions" />
         <Stack.Screen name="capture" />
+        <Stack.Screen name="photo-confirm" />
         <Stack.Screen name="processing" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="privacy" />
       </Stack>
     </GestureHandlerRootView>
   );

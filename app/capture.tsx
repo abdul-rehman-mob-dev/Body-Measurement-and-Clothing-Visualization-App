@@ -1,48 +1,107 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert } from 'react-native';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Alert, Animated } from 'react-native';
+import Svg, { Circle, Line } from 'react-native-svg';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import * as KeepAwake from 'expo-keep-awake';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../constants/theme';
 import { useAppStore } from '../store/useAppStore';
+import { detectPose, PoseLandmark, BODY_LANDMARKS } from '../services/poseDetection';
 
 const { width, height } = Dimensions.get('window');
 
 const steps = [
   { label: 'Front View', instruction: 'Stand facing the camera with arms slightly out', tapLabel: 'Front profile — tap to capture' },
   { label: 'Side View', instruction: 'Turn 90° to your right and stand straight', tapLabel: 'Side profile — tap to capture' },
+  { label: 'Back View', instruction: 'Turn around and face away from camera', tapLabel: 'Back profile — tap to capture' },
+];
+
+const CONNECTIONS: [number, number][] = [
+  [BODY_LANDMARKS.LEFT_SHOULDER, BODY_LANDMARKS.RIGHT_SHOULDER],
+  [BODY_LANDMARKS.LEFT_SHOULDER, BODY_LANDMARKS.LEFT_ELBOW],
+  [BODY_LANDMARKS.LEFT_ELBOW, BODY_LANDMARKS.LEFT_WRIST],
+  [BODY_LANDMARKS.RIGHT_SHOULDER, BODY_LANDMARKS.RIGHT_ELBOW],
+  [BODY_LANDMARKS.RIGHT_ELBOW, BODY_LANDMARKS.RIGHT_WRIST],
+  [BODY_LANDMARKS.LEFT_SHOULDER, BODY_LANDMARKS.LEFT_HIP],
+  [BODY_LANDMARKS.RIGHT_SHOULDER, BODY_LANDMARKS.RIGHT_HIP],
+  [BODY_LANDMARKS.LEFT_HIP, BODY_LANDMARKS.RIGHT_HIP],
+  [BODY_LANDMARKS.LEFT_HIP, BODY_LANDMARKS.LEFT_KNEE],
+  [BODY_LANDMARKS.LEFT_KNEE, BODY_LANDMARKS.LEFT_ANKLE],
+  [BODY_LANDMARKS.RIGHT_HIP, BODY_LANDMARKS.RIGHT_KNEE],
+  [BODY_LANDMARKS.RIGHT_KNEE, BODY_LANDMARKS.RIGHT_ANKLE],
 ];
 
 export default function CaptureScreen() {
   const router = useRouter();
-  const cameraRef = useRef<any>(null);
-  const { captureStep: step, setCaptureStep: setStep, resetCapture, addCapturedPhoto } = useAppStore();
-  const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const cameraRef = useRef<CameraView>(null);
+  const { captureStep: step, setCaptureStep: setStep, addCapturedPhoto } = useAppStore();
+  const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [isCapturing, setIsCapturing] = useState(false);
+  const [landmarks, setLandmarks] = useState<PoseLandmark[]>([]);
+  const [poseConfidence, setPoseConfidence] = useState(0);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const lastCaptureTime = useRef(0);
   const currentStep = steps[step];
+
+  const runPoseDetection = useCallback(async () => {
+    if (isDetecting) return;
+    setIsDetecting(true);
+
+    try {
+      const view = step === 0 ? 'front' : 'side';
+      const photoUri = cameraRef.current ? 'live-frame' : '';
+      const result = await detectPose(photoUri, view);
+
+      if (result.isValid) {
+        setLandmarks(result.landmarks);
+        setPoseConfidence(result.confidence);
+
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.1, duration: 200, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start();
+      }
+    } catch (error) {
+      console.log('Pose detection error:', error);
+    } finally {
+      setIsDetecting(false);
+    }
+  }, [step, isDetecting, pulseAnim]);
+
+  useEffect(() => {
+    KeepAwake.activateKeepAwakeAsync().catch(() => {});
+
+    const interval = setInterval(runPoseDetection, 2000);
+    runPoseDetection();
+    return () => {
+      clearInterval(interval);
+      KeepAwake.deactivateKeepAwake().catch(() => {});
+    };
+  }, [runPoseDetection]);
 
   const takePicture = async () => {
     if (!cameraRef.current || isCapturing) return;
+
+    const now = Date.now();
+    if (now - lastCaptureTime.current < 1500) return;
+    lastCaptureTime.current = now;
 
     setIsCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
+        base64: false,
         skipProcessing: false,
       });
 
       if (photo && photo.uri) {
         addCapturedPhoto(photo.uri);
-
-        if (step < steps.length - 1) {
-          setStep(step + 1);
-        } else {
-          resetCapture();
-          router.push('/processing');
-        }
+        router.push('/photo-confirm');
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to capture photo. Please try again.');
     } finally {
       setIsCapturing(false);
@@ -50,7 +109,7 @@ export default function CaptureScreen() {
   };
 
   const toggleCamera = () => {
-    setFacing(facing === 'front' ? 'back' : 'front');
+    setFacing(facing === 'back' ? 'front' : 'back');
   };
 
   if (!permission) {
@@ -96,31 +155,66 @@ export default function CaptureScreen() {
       </View>
 
       <View style={styles.bodyOverlay}>
-        <View style={styles.bodyOutline}>
-          <View style={styles.shoulderMarker}>
-            <View style={styles.markerLine} />
-            <Text style={styles.markerLabel}>Shoulder</Text>
+        {landmarks.length > 0 ? (
+          <Svg style={StyleSheet.absoluteFill} viewBox={`0 0 ${width} ${height}`}>
+            {CONNECTIONS.map(([startIdx, endIdx], i) => {
+              const start = landmarks[startIdx];
+              const end = landmarks[endIdx];
+              if (!start || !end) return null;
+              return (
+                <Line
+                  key={`conn-${i}`}
+                  x1={start.x}
+                  y1={start.y}
+                  x2={end.x}
+                  y2={end.y}
+                  stroke={Colors.success}
+                  strokeWidth="2"
+                  strokeOpacity="0.8"
+                />
+              );
+            })}
+            {landmarks.map((lm, i) => (
+              <Circle
+                key={`lm-${i}`}
+                cx={lm.x}
+                cy={lm.y}
+                r="4"
+                fill={Colors.success}
+                fillOpacity={lm.visibility}
+              />
+            ))}
+          </Svg>
+        ) : (
+          <View style={styles.bodyOutline}>
+            <View style={styles.shoulderMarker}>
+              <View style={styles.markerLine} />
+              <Text style={styles.markerLabel}>Shoulder</Text>
+            </View>
+            <View style={styles.waistMarker}>
+              <View style={styles.markerLine} />
+              <Text style={styles.markerLabel}>Waist</Text>
+            </View>
+            <View style={styles.hipMarker}>
+              <View style={styles.markerLine} />
+              <Text style={styles.markerLabel}>Hip</Text>
+            </View>
+            <View style={[styles.dashedOutline, styles.dashedTop]} />
+            <View style={[styles.dashedOutline, styles.dashedMiddle]} />
+            <View style={[styles.dashedOutline, styles.dashedBottom]} />
           </View>
-
-          <View style={styles.waistMarker}>
-            <View style={styles.markerLine} />
-            <Text style={styles.markerLabel}>Waist</Text>
-          </View>
-
-          <View style={styles.hipMarker}>
-            <View style={styles.markerLine} />
-            <Text style={styles.markerLabel}>Hip</Text>
-          </View>
-
-          <View style={[styles.dashedOutline, styles.dashedTop]} />
-          <View style={[styles.dashedOutline, styles.dashedMiddle]} />
-          <View style={[styles.dashedOutline, styles.dashedBottom]} />
-        </View>
+        )}
       </View>
 
       <View style={styles.alignmentBadge}>
-        <View style={styles.alignmentDot} />
-        <Text style={styles.alignmentText}>Perfect alignment</Text>
+        <Animated.View style={[styles.alignmentDot, { transform: [{ scale: pulseAnim }] }]} />
+        <Text style={styles.alignmentText}>
+          {landmarks.length > 0
+            ? poseConfidence >= 85
+              ? 'Perfect alignment'
+              : 'Adjust your pose'
+            : 'Detecting body...'}
+        </Text>
       </View>
 
       <View style={styles.cornerMarkers}>
@@ -272,33 +366,34 @@ const styles = StyleSheet.create({
     width: 180,
     height: 360,
     position: 'relative',
+    marginLeft: -60,
   },
   shoulderMarker: {
     position: 'absolute',
     top: 40,
-    left: -60,
+    left: -80,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   waistMarker: {
     position: 'absolute',
-    top: 170,
-    left: -60,
+    top: 180,
+    left: -80,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   hipMarker: {
     position: 'absolute',
-    top: 250,
-    left: -60,
+    top: 280,
+    left: -80,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   markerLine: {
-    width: 30,
+    width: 20,
     height: 1.5,
     backgroundColor: Colors.success,
   },
@@ -323,10 +418,10 @@ const styles = StyleSheet.create({
     top: 60,
   },
   dashedMiddle: {
-    top: 180,
+    top: 200,
   },
   dashedBottom: {
-    top: 260,
+    top: 300,
   },
   alignmentBadge: {
     position: 'absolute',
@@ -361,26 +456,26 @@ const styles = StyleSheet.create({
     borderColor: Colors.success,
   },
   topLeft: {
-    top: '28%',
-    left: '22%',
+    top: '25%',
+    left: '20%',
     borderTopWidth: 2,
     borderLeftWidth: 2,
   },
   topRight: {
-    top: '28%',
-    right: '22%',
+    top: '25%',
+    right: '20%',
     borderTopWidth: 2,
     borderRightWidth: 2,
   },
   bottomLeft: {
-    bottom: '28%',
-    left: '22%',
+    bottom: '30%',
+    left: '20%',
     borderBottomWidth: 2,
     borderLeftWidth: 2,
   },
   bottomRight: {
-    bottom: '28%',
-    right: '22%',
+    bottom: '30%',
+    right: '20%',
     borderBottomWidth: 2,
     borderRightWidth: 2,
   },

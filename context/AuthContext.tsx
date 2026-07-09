@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { getUserProfile, UserProfile } from '../services/auth';
 import { useAppStore } from '../store/useAppStore';
+import { verifyAuthToken } from '../services/backendApi';
 
 interface AuthContextType {
   user: User | null;
@@ -26,6 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const storeSetUser = useAppStore((s) => s.setUser);
   const storeSetMeasurements = useAppStore((s) => s.setMeasurements);
+  const clearUserData = useAppStore((s) => s.clearUserData);
+  const lastUserIdRef = useRef<string | null>(null);
 
   const syncProfileToStore = (profile: UserProfile) => {
     storeSetUser({
@@ -54,8 +57,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
       if (firebaseUser) {
+        const newUserId = firebaseUser.uid;
+        if (lastUserIdRef.current && lastUserIdRef.current !== newUserId) {
+          clearUserData();
+        }
+        lastUserIdRef.current = newUserId;
+
+        setUser(firebaseUser);
         const profile = await getUserProfile(firebaseUser.uid);
         setUserProfile(profile);
         if (profile) {
@@ -66,8 +75,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             email: firebaseUser.email || '',
           });
         }
+
+        // Sync user with backend
+        try {
+          await verifyAuthToken(firebaseUser.displayName || undefined);
+        } catch (error) {
+          console.log('Backend sync skipped (server may not be running):', error);
+        }
       } else {
+        setUser(null);
         setUserProfile(null);
+        lastUserIdRef.current = null;
       }
       setLoading(false);
     });

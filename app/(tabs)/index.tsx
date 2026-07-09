@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import Svg, { Polygon, Circle, Line, Text as SvgText, Rect } from "react-native-svg";
+import Svg, { Polygon, Circle, Line, Text as SvgText } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -21,16 +21,6 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAppStore } from "../../store/useAppStore";
 
 const { width } = Dimensions.get("window");
-
-const measurements = [
-  { label: "Chest", key: "chest" as const, unit: "cm", change: "+2cm since last scan", changeType: "up" as const, icon: "🫁", color: "#FEE2E2" },
-  { label: "Waist", key: "waist" as const, unit: "cm", change: "-1cm since last scan", changeType: "down" as const, icon: "⚡", color: "#FEF3C7" },
-  { label: "Hips", key: "hips" as const, unit: "cm", change: "No change", changeType: "neutral" as const, icon: "🔴", color: "#F3F4F6" },
-  { label: "Shoulder", key: "shoulder" as const, unit: "cm", change: "+0.5cm since last scan", changeType: "up" as const, icon: "📐", color: "#DBEAFE" },
-  { label: "Inseam", key: "inseam" as const, unit: "cm", change: "No change", changeType: "neutral" as const, icon: "📏", color: "#F3F4F6" },
-  { label: "Neck", key: "neck" as const, unit: "cm", change: "-0.5cm since last scan", changeType: "down" as const, icon: "🎯", color: "#ECFDF5" },
-];
-
 const radarLabels = ["Chest", "Waist", "Hips", "Shoulder", "Inseam", "Arms"];
 
 export default function HomeScreen() {
@@ -60,7 +50,7 @@ export default function HomeScreen() {
     { label: "Neck", key: "neck" as const, unit: "cm", icon: "🎯", color: "#ECFDF5" },
   ];
 
-  const currentChest = storeMeasurements.chest;
+  const currentChest = storeMeasurements.chest || 0;
   const lastFourScans = scanHistory.slice(0, 4).reverse();
   const historyData = lastFourScans.length >= 2
     ? lastFourScans.map((scan, i) => {
@@ -69,8 +59,8 @@ export default function HomeScreen() {
         return { month: months[date.getMonth()], value: scan.chest };
       })
     : [
-        { month: "Jan", value: currentChest - 4 },
-        { month: "Mar", value: currentChest - 2 },
+        { month: "Jan", value: Math.max(0, currentChest - 4) },
+        { month: "Mar", value: Math.max(0, currentChest - 2) },
         { month: "May", value: currentChest + 1 },
         { month: "Jul", value: currentChest },
       ];
@@ -393,7 +383,7 @@ export default function HomeScreen() {
                 {historyData.map((item, index) => {
                   const minVal = 88;
                   const maxVal = 98;
-                  const barHeight = ((item.value - minVal) / (maxVal - minVal)) * 140;
+                  const barHeight = Math.max(0, ((item.value - minVal) / (maxVal - minVal)) * 140);
                   return (
                     <View key={index} style={styles.barColumn}>
                       <View style={styles.barWrapper}>

@@ -1,47 +1,62 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { TextInput } from '../../components/TextInput';
-import { Button } from '../../components/Button';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../constants/theme';
-import { useTheme } from '../../context/ThemeContext';
-import { signUp } from '../../services/auth';
-import { useAppStore } from '../../store/useAppStore';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { TextInput } from "../../components/TextInput";
+import { Button } from "../../components/Button";
+import {
+  Colors,
+  FontSize,
+  FontWeight,
+  Spacing,
+  BorderRadius,
+} from "../../constants/theme";
+import { useTheme } from "../../context/ThemeContext";
+import { signUp } from "../../services/auth";
+import { useAppStore } from "../../store/useAppStore";
 
 export default function CreateAccountScreen() {
   const router = useRouter();
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const { colors } = useTheme();
   const { setUser } = useAppStore();
 
   const handleCreateAccount = async () => {
     if (!fullName || !email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert("Error", "Please fill in all fields");
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      Alert.alert("Error", "Password must be at least 6 characters");
       return;
     }
     setLoading(true);
     try {
-      const user = await signUp(email, password, fullName);
+      await signUp(email, password, fullName);
       setUser({ name: fullName, email });
-      router.push('/profile-setup');
+      router.push("/profile-setup");
     } catch (error: any) {
-      let message = 'Something went wrong';
-      if (error.code === 'auth/email-already-in-use') {
-        message = 'An account with this email already exists';
-      } else if (error.code === 'auth/invalid-email') {
-        message = 'Invalid email address';
-      } else if (error.code === 'auth/weak-password') {
-        message = 'Password is too weak';
+      let message = "Something went wrong";
+      if (error.code === "auth/email-already-in-use") {
+        message = "An account with this email already exists";
+      } else if (error.code === "auth/invalid-email") {
+        message = "Invalid email address";
+      } else if (error.code === "auth/weak-password") {
+        message = "Password is too weak";
       }
-      Alert.alert('Sign Up Failed', message);
+      Alert.alert("Sign Up Failed", message);
     } finally {
       setLoading(false);
     }
@@ -50,10 +65,16 @@ export default function CreateAccountScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <TouchableOpacity style={[styles.backButton, { borderColor: colors.border }]} onPress={() => router.back()}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableOpacity
+          style={[styles.backButton, { borderColor: colors.border }]}
+          onPress={() => router.back()}
+        >
           <Ionicons name="chevron-back" size={24} color={colors.text} />
         </TouchableOpacity>
 
@@ -61,19 +82,23 @@ export default function CreateAccountScreen() {
           <Ionicons name="person-outline" size={28} color={Colors.white} />
         </View>
 
-        <Text style={[styles.title, { color: colors.text }]}>Create account</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Start your precision fitting journey</Text>
+        <Text style={[styles.title, { color: colors.text }]}>
+          Create account
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Start your precision fitting journey
+        </Text>
 
         <View style={styles.form}>
           <TextInput
             label="FULL NAME"
-            placeholder="Alex Johnson"
+            placeholder="Type Here"
             value={fullName}
             onChangeText={setFullName}
           />
           <TextInput
             label="EMAIL"
-            placeholder="you@example.com"
+            placeholder="you@gmail.com"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -81,7 +106,7 @@ export default function CreateAccountScreen() {
           />
           <TextInput
             label="PASSWORD"
-            placeholder="Min. 6 characters"
+            placeholder="Min. 8 characters"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -96,14 +121,15 @@ export default function CreateAccountScreen() {
         </View>
 
         <Button
-          title="Create Account →"
+          title="Create Account"
           onPress={handleCreateAccount}
           loading={loading}
         />
 
-        <TouchableOpacity onPress={() => router.push('/auth/sign-in')}>
+        <TouchableOpacity onPress={() => router.push("/auth/sign-in")}>
           <Text style={[styles.signInText, { color: colors.textSecondary }]}>
-            Already have an account? <Text style={styles.signInLink}>Sign in</Text>
+            Already have an account?{" "}
+            <Text style={styles.signInLink}>Sign in</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -125,8 +151,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.xxxl,
   },
   iconContainer: {
@@ -134,8 +160,8 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: BorderRadius.lg,
     backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: Spacing.xl,
   },
   title: {
@@ -151,7 +177,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xxl,
   },
   strengthBars: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.sm,
     marginTop: Spacing.md,
   },
@@ -161,7 +187,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   signInText: {
-    textAlign: 'center',
+    textAlign: "center",
     fontSize: FontSize.md,
     marginTop: Spacing.xxl,
   },

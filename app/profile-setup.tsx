@@ -214,7 +214,7 @@ export default function ProfileSetupScreen() {
                   age: Number(age) || 28,
                 });
                 await refreshProfile();
-              } catch (error) {
+              } catch {
                 Alert.alert("Error", "Failed to save profile");
               } finally {
                 setLoading(false);

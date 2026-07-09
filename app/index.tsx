@@ -1,18 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontSize, FontWeight, Spacing } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 
-const { width } = Dimensions.get('window');
-
 export default function SplashScreen() {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const fadeAnim = useState(new Animated.Value(0))[0];
-  const scaleAnim = useState(new Animated.Value(0.5))[0];
-  const spinValue = useState(new Animated.Value(0))[0];
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
+  const spinValue = useRef(new Animated.Value(0)).current;
+  const userRef = useRef(user);
+  const loadingRef = useRef(loading);
+
+  useEffect(() => {
+    userRef.current = user;
+    loadingRef.current = loading;
+  }, [user, loading]);
 
   useEffect(() => {
     Animated.parallel([
@@ -39,12 +44,10 @@ export default function SplashScreen() {
     spin.start();
 
     const timer = setTimeout(() => {
-      if (!loading) {
-        if (user) {
-          router.replace('/(tabs)');
-        } else {
-          router.replace('/onboarding');
-        }
+      if (userRef.current) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/onboarding');
       }
     }, 2500);
 
@@ -52,7 +55,7 @@ export default function SplashScreen() {
       clearTimeout(timer);
       spin.stop();
     };
-  }, [user, loading]);
+  }, [fadeAnim, scaleAnim, spinValue, router]);
 
   const rotation = spinValue.interpolate({
     inputRange: [0, 1],

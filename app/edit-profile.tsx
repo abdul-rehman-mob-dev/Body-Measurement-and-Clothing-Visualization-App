@@ -16,7 +16,6 @@ import {
   FontSize,
   FontWeight,
   Spacing,
-  BorderRadius,
 } from "../constants/theme";
 import { useTheme } from "../context/ThemeContext";
 import { useAppStore } from "../store/useAppStore";
@@ -74,7 +73,7 @@ export default function EditProfileScreen() {
           profileImage,
         });
         await refreshProfile();
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "Failed to save profile");
       }
     }

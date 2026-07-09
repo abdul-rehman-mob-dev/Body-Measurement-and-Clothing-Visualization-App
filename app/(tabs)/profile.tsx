@@ -6,17 +6,19 @@ import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../const
 import { useTheme } from '../../context/ThemeContext';
 import { useAppStore } from '../../store/useAppStore';
 import { logOut } from '../../services/auth';
+import { SecureStorage } from '../../services/secureStorage';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { user, measurements, selectedSize, scanHistory } = useAppStore();
+  const { user, measurements, selectedSize, scanHistory, clearUserData } = useAppStore();
+  const clearScanHistory = useAppStore((s) => s.clearScanHistory);
 
   const menuItems = [
     { icon: 'camera-outline', title: 'Rescan Body', subtitle: 'Update your measurements', screen: '/instructions' },
     { icon: 'stats-chart-outline', title: 'Measurement History', subtitle: `${scanHistory.length} scans completed`, screen: null },
     { icon: 'notifications-outline', title: 'Scan Reminders', subtitle: 'Monthly reminders enabled', screen: null },
-    { icon: 'shield-outline', title: 'Privacy & Data', subtitle: 'Manage your data', screen: null },
+    { icon: 'shield-outline', title: 'Privacy & Data', subtitle: 'Manage your data & security', screen: '/privacy' },
   ];
 
   return (
@@ -109,7 +111,58 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.signOutButton} onPress={async () => {
+        {scanHistory.length > 0 && (
+          <View style={[styles.sectionCard, { backgroundColor: colors.card }]}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Scan History</Text>
+              <TouchableOpacity onPress={() => {
+                Alert.alert(
+                  "Clear Scan History",
+                  "Are you sure? This will delete all scan records.",
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Clear All",
+                      style: "destructive",
+                      onPress: () => clearScanHistory(),
+                    },
+                  ]
+                );
+              }}>
+                <Text style={[styles.clearAllText]}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
+            {scanHistory.map((scan, index) => (
+              <View key={scan.id} style={[styles.scanItem, { borderBottomColor: colors.border }]}>
+                <View style={styles.scanLeft}>
+                  <View style={[styles.scanIcon, { backgroundColor: colors.surface }]}>
+                    <Ionicons name="body-outline" size={20} color={Colors.primary} />
+                  </View>
+                  <View>
+                    <Text style={[styles.scanDate, { color: colors.text }]}>
+                      {new Date(scan.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                    <Text style={[styles.scanTime, { color: colors.textSecondary }]}>
+                      {new Date(scan.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.scanRight}>
+                  <View style={[styles.scanSizeBadge, { backgroundColor: Colors.primary + '15' }]}>
+                    <Text style={[styles.scanSizeText, { color: Colors.primary }]}>{scan.size}</Text>
+                  </View>
+                  <View style={styles.scanMeasurements}>
+                    <Text style={[styles.scanMeasurement, { color: colors.textSecondary }]}>
+                      {scan.chest}cm chest
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity style={[styles.signOutButton]} onPress={async () => {
           Alert.alert(
             "Sign Out",
             "Are you sure you want to sign out?",
@@ -120,13 +173,15 @@ export default function ProfileScreen() {
                 style: "destructive",
                 onPress: async () => {
                   await logOut();
-                  router.replace("/auth/sign-in");
+                  clearUserData();
+                  await SecureStorage.clearAllData();
+                  router.replace("/onboarding");
                 },
               },
             ]
           );
         }}>
-          <View style={styles.signOutIcon}>
+          <View style={[styles.signOutIcon]}>
             <Ionicons name="log-out-outline" size={22} color={Colors.error} />
           </View>
           <Text style={styles.signOutText}>Sign Out</Text>
@@ -323,5 +378,57 @@ const styles = StyleSheet.create({
     fontSize: FontSize.md,
     fontWeight: FontWeight.medium,
     color: Colors.error,
+  },
+  scanItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 0.5,
+  },
+  scanLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+  },
+  scanIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanDate: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.medium,
+  },
+  scanTime: {
+    fontSize: FontSize.sm,
+    marginTop: 2,
+  },
+  scanRight: {
+    alignItems: 'flex-end',
+    gap: Spacing.xs,
+  },
+  scanSizeBadge: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+  },
+  scanSizeText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.bold,
+  },
+  scanMeasurements: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  scanMeasurement: {
+    fontSize: FontSize.xs,
+  },
+  clearAllText: {
+    fontSize: FontSize.sm,
+    color: Colors.error,
+    fontWeight: FontWeight.medium,
   },
 });

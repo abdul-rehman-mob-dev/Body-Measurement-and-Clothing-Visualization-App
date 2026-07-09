@@ -46,7 +46,7 @@ export default function OnboardingScreen() {
       <View style={styles.bottomSection}>
         <View style={styles.buttonContainer}>
           <Button
-            title="Get Started →"
+            title="Get Started"
             onPress={() => router.push("/auth/create-account")}
             variant="primary"
           />

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,14 +17,20 @@ import {
   BorderRadius,
 } from "../../constants/theme";
 import { useTheme } from "../../context/ThemeContext";
-import { useAppStore } from "../../store/useAppStore";
+import { UnitConverter, UnitSystem } from "../../services/unitConverter";
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { isDark, toggleTheme, colors } = useTheme();
-  const { user } = useAppStore();
   const [pushNotifications, setPushNotifications] = useState(true);
   const [hapticFeedback, setHapticFeedback] = useState(true);
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>(
+    UnitConverter.getPreferences().length
+  );
+
+  useEffect(() => {
+    UnitConverter.setPreferences({ length: unitSystem, weight: unitSystem });
+  }, [unitSystem]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -92,11 +98,20 @@ export default function SettingsScreen() {
               <Text style={[styles.settingTitle, { color: colors.text }]}>
                 Measurement Units
               </Text>
+              <Text
+                style={[
+                  styles.settingSubtitle,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {unitSystem === 'metric' ? 'Centimeters (cm) & Kilograms (kg)' : 'Inches (in) & Pounds (lbs)'}
+              </Text>
             </View>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={colors.textTertiary}
+            <Switch
+              value={unitSystem === 'imperial'}
+              onValueChange={(value) => setUnitSystem(value ? 'imperial' : 'metric')}
+              trackColor={{ false: Colors.border, true: Colors.primary }}
+              thumbColor={Colors.white}
             />
           </View>
         </View>

@@ -1,23 +1,96 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Animated } from 'react-native';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../constants/theme';
+import * as KeepAwake from 'expo-keep-awake';
+import { Colors, FontSize, FontWeight, Spacing } from '../constants/theme';
 import { useAppStore } from '../store/useAppStore';
 import { processPhotos } from '../services/mockApi';
 
-const { width } = Dimensions.get('window');
-
 export default function ProcessingScreen() {
   const router = useRouter();
-  const { capturedPhotos, setMeasurements, setSelectedSize, clearCapturedPhotos, addScan } = useAppStore();
+  const { capturedPhotos, measurements, setMeasurements, setSelectedSize, setCaptureStep, clearCapturedPhotos, addScan, saveScanPhotos } = useAppStore();
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState('Starting...');
   const [isDone, setIsDone] = useState(false);
-  const pulseAnim = useState(new Animated.Value(1))[0];
-  const rotateAnim = useState(new Animated.Value(0))[0];
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const processingRef = useRef(false);
+
+  const startProcessing = useCallback(async () => {
+    if (processingRef.current) return;
+    processingRef.current = true;
+
+    try {
+      const state = useAppStore.getState();
+      const userHeight = state.measurements.height || 175;
+      const userWeight = state.measurements.weight || 70;
+      const photos = state.capturedPhotos;
+      const frontPhotoUri = photos[0];
+
+      if (!frontPhotoUri) {
+        setCurrentStep('No photo captured');
+        setTimeout(() => router.replace('/capture'), 2000);
+        return;
+      }
+
+      const result = await processPhotos(photos, (step, prog) => {
+        setCurrentStep(step);
+        setProgress(prog);
+      }, userHeight, userWeight);
+
+      if (!result.success) {
+        setCurrentStep('Could not detect body pose. Please try again.');
+        setTimeout(() => router.replace('/capture'), 2000);
+        return;
+      }
+
+      setMeasurements({
+        chest: result.measurements.chest,
+        waist: result.measurements.waist,
+        hips: result.measurements.hips,
+        shoulder: result.measurements.shoulder,
+        inseam: result.measurements.inseam,
+        neck: result.measurements.neck,
+      });
+
+      const size = result.size;
+      setSelectedSize(size);
+
+      addScan({
+        chest: result.measurements.chest,
+        waist: result.measurements.waist,
+        hips: result.measurements.hips,
+        shoulder: result.measurements.shoulder,
+        inseam: result.measurements.inseam,
+        neck: result.measurements.neck,
+        arms: result.measurements.arms,
+        size,
+        confidence: result.confidence,
+        qualityScore: result.qualityScore,
+      });
+
+      setCurrentStep('Building your profile...');
+      setProgress(100);
+
+      setIsDone(true);
+
+      setTimeout(() => {
+        const front = photos[0] || '';
+        const side = photos[1] || photos[0] || '';
+        saveScanPhotos(front, side);
+        clearCapturedPhotos();
+        setCaptureStep(0);
+        router.replace('/(tabs)/avatar');
+      }, 1500);
+    } catch (error) {
+      console.error('Processing error:', error);
+      setCurrentStep('Error occurred. Please try again.');
+      setTimeout(() => router.replace('/capture'), 2000);
+    }
+  }, [setMeasurements, setSelectedSize, setCaptureStep, clearCapturedPhotos, addScan, saveScanPhotos, router]);
 
   useEffect(() => {
-    Animated.loop(
+    const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1.1,
@@ -30,53 +103,28 @@ export default function ProcessingScreen() {
           useNativeDriver: true,
         }),
       ])
-    ).start();
+    );
 
-    Animated.loop(
+    const rotate = Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
         duration: 3000,
         useNativeDriver: true,
       })
-    ).start();
+    );
 
+    KeepAwake.activateKeepAwakeAsync().catch(() => {});
+
+    pulse.start();
+    rotate.start();
     startProcessing();
 
-    return () => {};
-  }, []);
-
-  const startProcessing = async () => {
-    try {
-      const result = await processPhotos(capturedPhotos, (step, prog) => {
-        setCurrentStep(step);
-        setProgress(prog);
-      });
-
-      if (result.success) {
-        setMeasurements(result.measurements);
-        setSelectedSize(result.size);
-        addScan({
-          chest: result.measurements.chest,
-          waist: result.measurements.waist,
-          hips: result.measurements.hips,
-          shoulder: result.measurements.shoulder,
-          inseam: result.measurements.inseam,
-          neck: result.measurements.neck,
-          arms: result.measurements.arms,
-          size: result.size,
-        });
-        setIsDone(true);
-
-        setTimeout(() => {
-          clearCapturedPhotos();
-          router.replace('/(tabs)');
-        }, 1500);
-      }
-    } catch (error) {
-      setCurrentStep('Error occurred');
-      setTimeout(() => router.back(), 2000);
-    }
-  };
+    return () => {
+      pulse.stop();
+      rotate.stop();
+      KeepAwake.deactivateKeepAwake().catch(() => {});
+    };
+  }, [startProcessing, pulseAnim, rotateAnim]);
 
   const rotation = rotateAnim.interpolate({
     inputRange: [0, 1],
@@ -129,6 +177,15 @@ export default function ProcessingScreen() {
               <Text style={styles.checkmarkText}>✓</Text>
             </View>
             <Text style={styles.doneText}>Measurements calculated successfully!</Text>
+            <View style={styles.qualityBadge}>
+              <View style={[
+                styles.qualityDot,
+                { backgroundColor: progress >= 90 ? Colors.success : progress >= 75 ? '#F59E0B' : '#EF4444' }
+              ]} />
+              <Text style={styles.qualityText}>
+                {progress >= 90 ? 'Excellent' : progress >= 75 ? 'Good' : 'Fair'} quality scan
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -258,5 +315,20 @@ const styles = StyleSheet.create({
     color: Colors.success,
     fontWeight: FontWeight.semibold,
     textAlign: 'center',
+  },
+  qualityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  qualityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  qualityText: {
+    fontSize: FontSize.sm,
+    color: Colors.textLight,
   },
 });

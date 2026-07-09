@@ -1,20 +1,27 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Colors, FontSize, FontWeight, Spacing, BorderRadius } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { useAppStore } from '../../store/useAppStore';
-
-const clothingItems = [
-  { name: 'Classic Tee', brand: 'Uniqlo', size: 'M', icon: '👕' },
-  { name: 'Oxford Shirt', brand: 'Ralph Lauren', size: 'M', icon: '👔' },
-  { name: 'Slim Jacket', brand: 'Zara', size: 'M', icon: '🧥' },
-];
+import { BodyAvatar3D } from '../../components/Avatar3D/BodyAvatar3D';
+import { CLOTHING_CATALOG, getSizeRecommendation } from '../../data/clothingData';
 
 type ViewAngle = 'L' | 'F' | 'R' | 'B';
 type FitType = 'Slim' | 'Regular' | 'Relaxed';
 
+const defaultMeasurements = {
+  chest: 94,
+  waist: 78,
+  hips: 97,
+  shoulders: 46,
+  inseam: 81,
+  neck: 38,
+};
+
 export default function AvatarScreen() {
+  const router = useRouter();
   const { colors } = useTheme();
   const {
     selectedViewAngle: selectedView,
@@ -29,6 +36,42 @@ export default function AvatarScreen() {
   const viewAngles: ViewAngle[] = ['L', 'F', 'R', 'B'];
   const fitTypes: FitType[] = ['Slim', 'Regular', 'Relaxed'];
 
+  const hasMeasurements = measurements.chest > 0 && measurements.shoulder > 0;
+
+  const bodyMeasurements = hasMeasurements
+    ? {
+        chest: measurements.chest,
+        waist: measurements.waist,
+        hips: measurements.hips,
+        shoulders: measurements.shoulder,
+        inseam: measurements.inseam || 81,
+        neck: measurements.neck || 38,
+      }
+    : defaultMeasurements;
+
+  const selectedClothingItem = CLOTHING_CATALOG[selectedClothing] || CLOTHING_CATALOG[0];
+  const sizeRecommendation = getSizeRecommendation(bodyMeasurements.chest);
+
+  if (!hasMeasurements) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="body-outline" size={80} color={colors.textSecondary} />
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>No Body Scan Yet</Text>
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            Complete a body scan to see your 3D avatar
+          </Text>
+          <TouchableOpacity
+            style={[styles.emptyButton, { backgroundColor: Colors.primary }]}
+            onPress={() => router.push('/capture')}
+          >
+            <Text style={styles.emptyButtonText}>Start Body Scan</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -41,76 +84,12 @@ export default function AvatarScreen() {
 
         <View style={[styles.avatarCard, { backgroundColor: colors.card }]}>
           <View style={styles.avatarContainer}>
-            {selectedView === 'F' && (
-              <View style={styles.avatarBody}>
-                <View style={styles.head} />
-                <View style={styles.torso} />
-                <View style={styles.armsContainer}>
-                  <View style={styles.arm} />
-                  <View style={styles.arm} />
-                </View>
-                <View style={styles.legsContainer}>
-                  <View style={styles.leg} />
-                  <View style={styles.leg} />
-                </View>
-              </View>
-            )}
-
-            {selectedView === 'B' && (
-              <View style={styles.avatarBody}>
-                <View style={styles.head} />
-                <View style={[styles.torso, { backgroundColor: '#2B5AD4' }]} />
-                <View style={styles.armsContainer}>
-                  <View style={[styles.arm, { backgroundColor: '#D97706' }]} />
-                  <View style={[styles.arm, { backgroundColor: '#D97706' }]} />
-                </View>
-                <View style={styles.legsContainer}>
-                  <View style={styles.leg} />
-                  <View style={styles.leg} />
-                </View>
-              </View>
-            )}
-
-            {selectedView === 'L' && (
-              <View style={styles.avatarBody}>
-                <View style={styles.head} />
-                <View style={[styles.torso, { width: 50, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]} />
-                <View style={[styles.armsContainer, { gap: 0, marginTop: -50, marginLeft: -20 }]}>
-                  <View style={[styles.arm, { width: 18 }]} />
-                </View>
-                <View style={styles.legsContainer}>
-                  <View style={[styles.leg, { width: 28 }]} />
-                </View>
-              </View>
-            )}
-
-            {selectedView === 'R' && (
-              <View style={styles.avatarBody}>
-                <View style={styles.head} />
-                <View style={[styles.torso, { width: 50, borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }]} />
-                <View style={[styles.armsContainer, { gap: 0, marginTop: -50, marginRight: -20 }]}>
-                  <View style={[styles.arm, { width: 18 }]} />
-                </View>
-                <View style={styles.legsContainer}>
-                  <View style={[styles.leg, { width: 28 }]} />
-                </View>
-              </View>
-            )}
-
-            <View style={styles.measurementsOverlay}>
-              <View style={styles.measurementTag}>
-                <Text style={styles.measurementTagText}>Ch</Text>
-                <Text style={styles.measurementTagValue}>{measurements.chest}cm</Text>
-              </View>
-              <View style={styles.measurementTag}>
-                <Text style={styles.measurementTagText}>Wa</Text>
-                <Text style={styles.measurementTagValue}>{measurements.waist}cm</Text>
-              </View>
-              <View style={styles.measurementTag}>
-                <Text style={styles.measurementTagText}>Hi</Text>
-                <Text style={styles.measurementTagValue}>{measurements.hips}cm</Text>
-              </View>
-            </View>
+            <BodyAvatar3D
+              measurements={bodyMeasurements}
+              clothingColor={selectedClothingItem.color}
+              clothingType={selectedClothingItem.type as 'shirt' | 'pants' | 'jacket'}
+              viewAngle={selectedView === 'F' ? 0 : selectedView === 'L' ? 90 : selectedView === 'B' ? 180 : 270}
+            />
           </View>
 
           <View style={styles.gridLines}>
@@ -134,6 +113,25 @@ export default function AvatarScreen() {
           </View>
         </View>
 
+        <View style={styles.measurementsRow}>
+          <View style={[styles.measurementCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.measurementLabel, { color: colors.textSecondary }]}>Ch</Text>
+            <Text style={[styles.measurementValue, { color: colors.text }]}>{bodyMeasurements.chest.toFixed(1)}cm</Text>
+          </View>
+          <View style={[styles.measurementCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.measurementLabel, { color: colors.textSecondary }]}>Wa</Text>
+            <Text style={[styles.measurementValue, { color: colors.text }]}>{bodyMeasurements.waist.toFixed(1)}cm</Text>
+          </View>
+          <View style={[styles.measurementCard, { backgroundColor: colors.card }]}>
+            <Text style={[styles.measurementLabel, { color: colors.textSecondary }]}>Hi</Text>
+            <Text style={[styles.measurementValue, { color: colors.text }]}>{bodyMeasurements.hips.toFixed(1)}cm</Text>
+          </View>
+          <View style={[styles.sizeCard, { backgroundColor: Colors.primary }]}>
+            <Text style={styles.sizeLabel}>Size</Text>
+            <Text style={styles.sizeValue}>{sizeRecommendation}</Text>
+          </View>
+        </View>
+
         <View style={styles.fitContainer}>
           {fitTypes.map((fit) => (
             <TouchableOpacity
@@ -151,9 +149,9 @@ export default function AvatarScreen() {
         <Text style={[styles.tryOnLabel, { color: colors.textSecondary }]}>TRY ON</Text>
 
         <View style={styles.clothingList}>
-          {clothingItems.map((item, index) => (
+          {CLOTHING_CATALOG.map((item, index) => (
             <TouchableOpacity
-              key={index}
+              key={item.id}
               style={[
                 styles.clothingCard,
                 { backgroundColor: colors.card },
@@ -161,10 +159,14 @@ export default function AvatarScreen() {
               ]}
               onPress={() => setSelectedClothing(index)}
             >
+              <View style={[styles.clothingColorDot, { backgroundColor: item.color }]} />
               <Text style={styles.clothingIcon}>{item.icon}</Text>
               <View style={styles.clothingInfo}>
                 <Text style={[styles.clothingName, { color: colors.text }]}>{item.name}</Text>
-                <Text style={[styles.clothingBrand, { color: colors.textSecondary }]}>{item.brand} · Size {item.size}</Text>
+                <Text style={[styles.clothingBrand, { color: colors.textSecondary }]}>{item.brand}</Text>
+              </View>
+              <View style={[styles.sizeBadge, { backgroundColor: Colors.primary + '20' }]}>
+                <Text style={[styles.sizeBadgeText, { color: Colors.primary }]}>{sizeRecommendation}</Text>
               </View>
               {selectedClothing === index && (
                 <View style={styles.checkmark}>
@@ -215,73 +217,11 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     width: '100%',
-    height: 220,
+    height: 350,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     marginBottom: Spacing.lg,
-  },
-  avatarBody: {
-    alignItems: 'center',
-  },
-  head: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F59E0B',
-    marginBottom: 4,
-  },
-  torso: {
-    width: 80,
-    height: 70,
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-  },
-  armsContainer: {
-    flexDirection: 'row',
-    gap: 60,
-    marginTop: -50,
-  },
-  arm: {
-    width: 16,
-    height: 50,
-    backgroundColor: '#F59E0B',
-    borderRadius: 4,
-  },
-  legsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: -2,
-  },
-  leg: {
-    width: 24,
-    height: 60,
-    backgroundColor: Colors.dark,
-    borderRadius: 4,
-  },
-  measurementsOverlay: {
-    position: 'absolute',
-    top: 20,
-    right: 10,
-    gap: 4,
-  },
-  measurementTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.blueBg,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: 4,
-    gap: 4,
-  },
-  measurementTagText: {
-    fontSize: 10,
-    color: Colors.textGray,
-  },
-  measurementTagValue: {
-    fontSize: 11,
-    fontWeight: FontWeight.semibold,
-    color: Colors.primary,
   },
   gridLines: {
     flexDirection: 'row',
@@ -314,6 +254,43 @@ const styles = StyleSheet.create({
     fontWeight: FontWeight.semibold,
   },
   viewButtonTextActive: {
+    color: Colors.white,
+  },
+  measurementsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    marginBottom: Spacing.xl,
+  },
+  measurementCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+  },
+  measurementLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+    marginBottom: 2,
+  },
+  measurementValue: {
+    fontSize: FontSize.md,
+    fontWeight: FontWeight.bold,
+  },
+  sizeCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.lg,
+  },
+  sizeLabel: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.medium,
+    color: Colors.white,
+    marginBottom: 2,
+  },
+  sizeValue: {
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.bold,
     color: Colors.white,
   },
   fitContainer: {
@@ -354,6 +331,11 @@ const styles = StyleSheet.create({
   clothingCardActive: {
     borderColor: Colors.primary,
   },
+  clothingColorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
   clothingIcon: {
     fontSize: 32,
   },
@@ -367,6 +349,15 @@ const styles = StyleSheet.create({
   clothingBrand: {
     fontSize: FontSize.sm,
   },
+  sizeBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  sizeBadgeText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+  },
   checkmark: {
     width: 28,
     height: 28,
@@ -374,5 +365,31 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.xxxl,
+    gap: Spacing.lg,
+  },
+  emptyTitle: {
+    fontSize: FontSize.xl,
+    fontWeight: FontWeight.bold,
+  },
+  emptyText: {
+    fontSize: FontSize.md,
+    textAlign: 'center',
+  },
+  emptyButton: {
+    paddingHorizontal: Spacing.xxl,
+    paddingVertical: Spacing.lg,
+    borderRadius: BorderRadius.xl,
+    marginTop: Spacing.md,
+  },
+  emptyButtonText: {
+    color: Colors.white,
+    fontSize: FontSize.lg,
+    fontWeight: FontWeight.semibold,
   },
 });
